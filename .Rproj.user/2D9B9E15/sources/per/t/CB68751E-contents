@@ -1,0 +1,67 @@
+---
+title: "MyFirstProject_EQS"
+author: "Chetan Ramlall"
+date: "24/07/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(Rblpapi)
+```
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Connect BBG API
+ # ******************************* 
+
+blpConnect()
+```
+
+## S&P 500 Levels Data
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Download SPX levels from 2003 to date.
+ # ******************************* 
+StartDate <- as.Date("2003/01/01")
+
+opt <- c("periodicitySelection" = "MONTHLY")
+
+SPXLevels <-  bdh("SPXT Index",
+      fields = c("PX_LAST"), 
+      StartDate,
+      options = opt)
+
+SPXLevelsPlot <- SPXLevels %>% 
+  ggplot(aes(x = date, y = PX_LAST)) +
+  geom_line() +
+  ggtitle("S&P 500 Levels from Jan 2003 to Jun 2021") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+SPXLevelsPlot
+
+```
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Download EQS Screen for SPX to see ROE and P/B Ratios
+ # ******************************* 
+
+EQSDate1 <- as.Date("2006/12/31")
+EQSDate2 <- as.Date("2007/12/31")
+
+EQSScreen2006 <- beqs("SPX_Screen", 
+                  screenType = "PRIVATE",
+                  date = EQSDate1)
+
+EQSScreen2007 <- beqs("SPX_Screen", 
+                  screenType = "PRIVATE",
+                  date = EQSDate2)
+
+```
+

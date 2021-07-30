@@ -1,0 +1,152 @@
+---
+title: "MyFirst Project"
+author: "Chetan Ramlall"
+date: "20/05/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(ggplot2)
+```
+
+```{r datainput, include=FALSE}
+ # ******************************* 
+ # Step 1 - Reads data files into a single dataframe.
+ # ******************************* 
+
+d1 <-  read_csv("EQS_20160131.csv")
+d2 <-  read_csv("EQS_20160229.csv")
+d3 <-  read_csv("EQS_20160331.csv")
+full_data <- na.omit(bind_rows(d1,d2,d3))   #Drops all rows with NA
+```
+
+```{r filter, include=FALSE}
+ # ******************************* 
+ # Step 2 - Groups and filters date
+ # ******************************* 
+
+FilteredData <- 
+  full_data %>% 
+  group_by(date) %>% 
+  top_n(20, MarketCapUSD) %>% 
+  ungroup()
+```
+
+## Ranking by USD Market Cap for the First Month (Jan 2016)
+```{r ranking, echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 3 - Ranking by MarketCapUSD and using kable.
+ # ******************************* 
+
+TableData <- FilteredData %>% 
+  filter(date == '2016-01-31') %>% 
+  select(date,Ticker,MarketCapUSD) 
+
+OrderedTableData <- TableData[order(TableData$MarketCapUSD,decreasing = TRUE),] 
+
+# Another way to do it using filter
+# full_data %>% group_by(date) %>% mutate(Rank = rank(MarketCapUSD)) %>% filter(Rank < 20) %>% select(-Rank)
+
+kable(OrderedTableData, align = "cccc", digits = 2,format.args = list(big.mark = ",",scientific = FALSE))
+```
+
+## Book Yield for the First Month (Jan 2016)
+```{r bookyield, echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 4 - Z-Score for BookYield
+ # ******************************* 
+
+YieldData <- full_data %>%
+  filter(date == '2016-01-31') %>% 
+  select(date,Ticker,BookYield) %>% 
+  mutate(Z_BookYield = (BookYield - mean(BookYield))/sd(BookYield))
+
+kable(YieldData, align = "cccc", digits = 2,format.args = list(big.mark = ",",scientific = FALSE))
+```
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 5 - Z-Scores for all months
+ # ******************************* 
+
+AllYieldData <- full_data %>%
+  group_by(date) %>% 
+  select(date,Ticker,BookYield) %>% 
+  mutate(Z_BookYield = (BookYield - mean(BookYield))/sd(BookYield)) %>% 
+  ungroup()
+```
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 6 - Top 10 stocks with highest bookyield for all months.
+ # ******************************* 
+
+Top10Yields <- AllYieldData %>%
+  group_by(date) %>% 
+  mutate(Rank = rank(-Z_BookYield,ties.method = "first")) %>% #rank orders ascendingly by default. 
+  filter(Rank <= 10) %>%                                      #Nice trick to negate argument to order desc.
+  select(-Rank) %>% 
+  ungroup()
+```
+
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 7 - Calculate Market Cap Weighted weight for the Top 10 stocks, per month.
+ # ******************************* 
+
+MktCapWeights <- full_data %>%
+  group_by(date) %>% 
+  mutate(Z_BookYield = (BookYield - mean(BookYield))/sd(BookYield)) %>% 
+  mutate(Rank = rank(-Z_BookYield,ties.method = "first")) %>%   #rank orders ascendingly by default. 
+  filter(Rank <= 10) %>%                                        #Nice trick to negate argument to order desc.
+  select(-Rank) %>% 
+  mutate(`MC Weight` = (MarketCapUSD/sum(MarketCapUSD))*100)
+
+```
+
+## Earnings Yield of a Cap-Weighted Portfolio of Top 10 Stocks
+```{r , echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 8 - Calculate the Earnings Yield for this cap-weighted portfolio, per month. 
+ # ******************************* 
+
+SummaryTable <- MktCapWeights %>%
+  summarise(`Total Weight` = sum(`MC Weight`),
+            `Portfolio EarningsYield` = sum(`MC Weight`/100*EarningsYield))
+  
+kable(SummaryTable, align = "ccc", digits = 2, format.args = list(big.mark = ",",
+  scientific = FALSE))
+```
+
+
+## Plots
+
+```{r, echo = FALSE, message=FALSE}
+ # ******************************* 
+ # Step 9 - Plot the Book Yield Z-scores and the portfolio's Earnings Yield through time.
+ # ******************************* 
+
+ZBookYieldJan <- YieldData %>% 
+  ggplot(aes(x = Ticker, y = Z_BookYield)) +
+  geom_bar(stat = "identity") + 
+  coord_flip() +
+  ggtitle("Book Yield Z-Scores for First Month (Jan 2016)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ZBookYieldJan
+
+CapWeightEarningsYield <- SummaryTable %>% 
+  ggplot(aes(x = date, y = `Portfolio EarningsYield`)) +
+  geom_line() +
+  ggtitle("Cap-Weighted Portfolio Earnings Yield over Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+CapWeightEarningsYield
+```
+
+
+
